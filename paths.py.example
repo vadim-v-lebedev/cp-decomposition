@@ -1,0 +1,2 @@
+caffe_root = 'path/to/caffe/'
+TENSORLAB_PATH = 'path/to/tensorlab/'
