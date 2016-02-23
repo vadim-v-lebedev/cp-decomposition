@@ -126,19 +126,20 @@ def prepare_models(LAYER, R, NET_PATH, NET_NAME, INPUT_DIM):
         print command
         subprocess.call(['matlab', '-nodesktop', '-nosplash', '-r', command])
 
-    f_x = np.loadtxt('f_x.txt').transpose()
-    f_y = np.loadtxt('f_y.txt').transpose()
-    f_c = np.loadtxt('f_c.txt').transpose()
-    f_n = np.loadtxt('f_n.txt')
-    if 0:    
-        f_x = np.random.standard_normal(f_x.shape)
-        f_y = np.random.standard_normal(f_y.shape)
-        f_c = np.random.standard_normal(f_c.shape)
-        f_n = np.random.standard_normal(f_n.shape)
-
     n = model.layer[ind].convolution_param.num_output
-    d = model.layer[ind].convolution_param.kernel_size
+    d = model.layer[ind].convolution_param.kernel_size[0]
     c = weights.shape[1]# / model.layer[ind].convolution_param.group #i don't know what i'm doing 
+
+    if 1:
+        f_x = np.loadtxt('f_x.txt').transpose()
+        f_y = np.loadtxt('f_y.txt').transpose()
+        f_c = np.loadtxt('f_c.txt').transpose()
+        f_n = np.loadtxt('f_n.txt')
+    else:    
+        f_x = np.random.standard_normal([R*d])
+        f_y = np.random.standard_normal([R*d])
+        f_c = np.random.standard_normal([R*c])
+        f_n = np.random.standard_normal([R*n])
     
     f_y = np.reshape(f_y, [R, 1, d, 1])
     f_x = np.reshape(f_x, [R, 1, 1, d])
