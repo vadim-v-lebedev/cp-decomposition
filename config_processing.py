@@ -4,12 +4,13 @@ import subprocess
 import google.protobuf
 import caffe
 
+from sktensor import dtensor, cp_als
+
 from paths import *
 
 def conv_layer(h, w, n, group=1, pad_h=0, pad_w=0, stride_h=1, stride_w=1):
     layer = caffe.proto.caffe_pb2.LayerParameter()
     layer.type = 'Convolution'
-    #layer.convolution_param.engine = caffe.proto.caffe_pb2.ConvolutionParameter.CUDNN
     if (h == w):
         layer.convolution_param.kernel_size.append(h)
     else:
@@ -102,44 +103,20 @@ def prepare_models(LAYER, R, NET_PATH, NET_NAME, INPUT_DIM):
     net = caffe.Classifier(NET_PREFIX + '_deploy.prototxt', NET_PREFIX + '.caffemodel')
     fast_net = caffe.Classifier(NET_PREFIX + '_accelerated_deploy.prototxt', NET_PREFIX + '.caffemodel')
 
-    l = ind - 2#layer index in deploy version
-    w = net.layers[l].blobs[0].data
-    print w.shape
-    g = model.layer[ind].convolution_param.group
-    if (g > 1):
-        weights = np.zeros((w.shape[0], g * w.shape[1], w.shape[2], w.shape[3]))
-        for i in range(g):
-            weights[i*w.shape[0]/g : (i+1)*w.shape[0]/g, i*w.shape[1] : (i+1)*w.shape[1], :, :] = w[i*w.shape[0]/g:(i+1)*w.shape[0]/g, :, :, :]
-            temp = w[i*w.shape[0]/g:(i+1)*w.shape[0]/g, :, :, :]
-            np.savetxt('group'+str(i)+'.txt', temp.ravel())
-    else:
-        weights = w
-
+    l = ind - 1#layer index in deploy version
+    weights = net.layers[l].blobs[0].data
     bias = net.layers[l].blobs[1]
-    np.savetxt('weights.txt', weights.ravel())
-    np.savetxt('biases.txt', bias.data.ravel())
 
-    if 1:
-        s = weights.shape
-        command = 'addpath(\'%s\'); addpath(\'%s\');' % (caffe_root + 'decomp', TENSORLAB_PATH)
-        command = command + ' decompose(%d, %d, %d, %d, %d); exit;' % (s[3], s[2], s[1], s[0], R)
-        print command
-        subprocess.call(['matlab', '-nodesktop', '-nosplash', '-r', command])
+    T = dtensor(weights)
+    P, fit, itr, exectimes = cp_als(T, R, init='random')
+    f_x = (np.array(P.U[3])*(P.lmbda)).T
+    f_y = np.array(P.U[2]).T
+    f_c = np.array(P.U[1]).T
+    f_n = np.array(P.U[0]) 
 
     n = model.layer[ind].convolution_param.num_output
     d = model.layer[ind].convolution_param.kernel_size[0]
-    c = weights.shape[1]# / model.layer[ind].convolution_param.group #i don't know what i'm doing 
-
-    if 1:
-        f_x = np.loadtxt('f_x.txt').transpose()
-        f_y = np.loadtxt('f_y.txt').transpose()
-        f_c = np.loadtxt('f_c.txt').transpose()
-        f_n = np.loadtxt('f_n.txt')
-    else:    
-        f_x = np.random.standard_normal([R*d])
-        f_y = np.random.standard_normal([R*d])
-        f_c = np.random.standard_normal([R*c])
-        f_n = np.random.standard_normal([R*n])
+    c = weights.shape[1]
     
     f_y = np.reshape(f_y, [R, 1, d, 1])
     f_x = np.reshape(f_x, [R, 1, 1, d])
